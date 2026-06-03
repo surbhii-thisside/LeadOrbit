@@ -152,8 +152,8 @@
                         <div class="glass-card p-4 border border-danger-subtle">
                             <div class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Danger Zone</div>
                             <p class="text-muted mb-3">These actions are irreversible.</p>
-                            <button class="btn btn-outline-danger btn-sm me-2">Delete All Leads</button>
-                            <button class="btn btn-outline-danger btn-sm">Delete Organization</button>
+                            <button class="btn btn-outline-danger btn-sm me-2" id="delete-leads-btn">Delete All Leads</button>
+                            <button class="btn btn-outline-danger btn-sm" id="delete-org-btn">Delete Organization</button>
                         </div>
                     </div>
                 </div>
@@ -163,7 +163,7 @@
 
     <script type="module" src="/main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth, clearTokens } from '/api.js';
 
         const apiBaseUrl = (localStorage.getItem('api_base_url') || '').replace(/\/$/, '');
         const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -227,6 +227,73 @@
                     } finally {
                         saveBtn.disabled = false;
                         saveBtn.textContent = 'Save Changes';
+                    }
+                });
+            }
+
+            const deleteLeadsBtn = document.getElementById('delete-leads-btn');
+            if (deleteLeadsBtn) {
+                deleteLeadsBtn.addEventListener('click', async () => {
+                    if (!confirm('Delete every lead in this organization? This cannot be undone.')) {
+                        return;
+                    }
+
+                    deleteLeadsBtn.disabled = true;
+                    deleteLeadsBtn.textContent = 'Deleting...';
+
+                    try {
+                        const res = await fetchWithAuth('/leads/delete-all/', { method: 'DELETE' });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                            alert(data.detail || data.error || 'Could not delete leads right now.');
+                            return;
+                        }
+
+                        alert(data.message || 'All leads were deleted.');
+                    } catch (e) {
+                        alert('Could not delete leads right now.');
+                    } finally {
+                        deleteLeadsBtn.disabled = false;
+                        deleteLeadsBtn.textContent = 'Delete All Leads';
+                    }
+                });
+            }
+
+            const deleteOrgBtn = document.getElementById('delete-org-btn');
+            if (deleteOrgBtn) {
+                deleteOrgBtn.addEventListener('click', async () => {
+                    const orgName = document.getElementById('org-name').value.trim();
+                    const typedName = prompt(`Type "${orgName}" to permanently delete this organization.`);
+                    if (typedName === null) {
+                        return;
+                    }
+                    if (!orgName || typedName.trim() !== orgName) {
+                        alert('Organization name did not match. Nothing was deleted.');
+                        return;
+                    }
+                    if (!confirm('This will permanently delete the organization and sign you out. Continue?')) {
+                        return;
+                    }
+
+                    deleteOrgBtn.disabled = true;
+                    deleteOrgBtn.textContent = 'Deleting...';
+
+                    try {
+                        const res = await fetchWithAuth('/auth/delete-organization/', { method: 'DELETE' });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                            alert(data.detail || data.error || 'Could not delete organization right now.');
+                            return;
+                        }
+
+                        clearTokens();
+                        alert(data.message || 'Organization deleted. You have been signed out.');
+                        window.location.href = '/login.html';
+                    } catch (e) {
+                        alert('Could not delete organization right now.');
+                    } finally {
+                        deleteOrgBtn.disabled = false;
+                        deleteOrgBtn.textContent = 'Delete Organization';
                     }
                 });
             }

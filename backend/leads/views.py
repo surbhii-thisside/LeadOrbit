@@ -15,6 +15,14 @@ class LeadViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
 
+    @action(detail=False, methods=['delete'], url_path='delete-all')
+    def delete_all(self, request):
+        deleted_count, _ = self.get_queryset().delete()
+        return Response(
+            {"message": f"Successfully deleted {deleted_count} leads."},
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=['post'], parser_classes=[parsers.MultiPartParser])
     def import_csv(self, request):
         file_obj = request.FILES.get('file')

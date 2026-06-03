@@ -55,3 +55,11 @@ class AuthViewSet(viewsets.GenericViewSet):
 
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated], url_path='delete-organization')
+    def delete_organization(self, request):
+        request.user.organization.delete()
+        return Response(
+            {'message': 'Organization successfully deleted.'},
+            status=status.HTTP_200_OK,
+        )

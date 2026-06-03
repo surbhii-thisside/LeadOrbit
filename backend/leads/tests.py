@@ -80,3 +80,11 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created = Lead.objects.get(email='new-orgb-lead@example.com')
         self.assertEqual(created.organization_id, self.org_b.id)
+
+    def test_delete_all_removes_only_current_users_organization_leads(self):
+        self.client.force_authenticate(self.user_a)
+        response = self.client.delete('/api/v1/leads/delete-all/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
+        self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())

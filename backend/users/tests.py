@@ -35,3 +35,10 @@ class AuthMeViewTests(APITestCase):
     def test_patch_me_rejects_empty_payload(self):
         response = self.client.patch('/api/v1/auth/me/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_organization_removes_current_organization(self):
+        response = self.client.delete('/api/v1/auth/delete-organization/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Organization.objects.filter(id=self.organization.id).exists())
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
