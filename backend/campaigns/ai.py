@@ -242,7 +242,7 @@ Requirements:
         
         # 3. Upgrade the deprecated engine version string to the current 2.0 version
         model = genai.GenerativeModel('gemini-2.0-flash')
-
+        response = model.generate_content(prompt)
         # Parse basic JSON from response...
         # For MVP we will just do simple replacement if JSON parsing fails
         text = response.text.strip()
