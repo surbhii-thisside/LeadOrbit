@@ -26,6 +26,24 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
         self.assertEqual(lead.phone, '+123456789')
 
+    def test_import_stores_non_standard_headers_as_custom_variables(self):
+        csv_data = (
+            "email,first_name,Industry,Meeting Time,Lead Source\n"
+            "bob@example.com,Bob,SaaS,10:30 AM,Referral\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id))
+
+        lead = Lead.objects.get(organization=self.organization, email='bob@example.com')
+        self.assertEqual(
+            lead.custom_variables,
+            {
+                'industry': 'SaaS',
+                'meeting_time': '10:30 AM',
+                'lead_source': 'Referral',
+            },
+        )
+
 
 class LeadIsolationAPITests(APITestCase):
     def setUp(self):

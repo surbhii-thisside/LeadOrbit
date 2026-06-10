@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _get_campaign_steps,
     poll_gmail_for_replies,
@@ -111,6 +112,26 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].delay_minutes, delay_minutes)
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
+
+    def test_personalize_email_replaces_custom_variables(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-vars@acme.test',
+            first_name='Casey',
+            custom_variables={
+                'industry': 'SaaS',
+                'meeting_time': '10:30 AM',
+            },
+        )
+
+        subject, body = personalize_email(
+            'Hello {{firstName}} from {{industry}}',
+            'Can we talk at {{meeting_time}}?',
+            lead,
+        )
+
+        self.assertEqual(subject, 'Hello Casey from SaaS')
+        self.assertEqual(body, 'Can we talk at 10:30 AM?')
 
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(

@@ -5,7 +5,7 @@ from celery import shared_task
 from django.conf import settings as django_settings
 from django.utils import timezone
 
-from .ai import personalize_email
+from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
@@ -317,16 +317,7 @@ def _personalize_text(template, lead):
     """Replace merge tags in SMS/call text with lead data."""
     if not template:
         return template
-    replacements = {
-        '{{firstName}}': lead.first_name or '',
-        '{{lastName}}': lead.last_name or '',
-        '{{email}}': lead.email or '',
-        '{{company}}': lead.company or '',
-    }
-    text = template
-    for tag, value in replacements.items():
-        text = text.replace(tag, value)
-    return text
+    return _apply_merge_tags(template, lead)
 
 
 def _execute_sms_step(clead, step, now=None):
