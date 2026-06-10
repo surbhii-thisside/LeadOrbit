@@ -7,8 +7,8 @@ from rest_framework.response import Response
 
 from leads.models import Lead
 
-from .models import Campaign, CampaignLead, SequenceStep
-from .serializers import CampaignSerializer, SequenceStepSerializer
+from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
+from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +203,17 @@ class SequenceStepViewSet(viewsets.ModelViewSet):
         campaign_id = self.kwargs.get('campaign_pk')
         campaign = Campaign.objects.get(id=campaign_id, organization=self.request.user.organization)
         serializer.save(campaign=campaign, organization=self.request.user.organization)
+
+class EmailTemplateViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmailTemplateSerializer
+    queryset = EmailTemplate.objects.all()
+
+    def get_queryset(self):
+        return EmailTemplate.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 from rest_framework.views import APIView
 from django.utils import timezone

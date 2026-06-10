@@ -69,6 +69,16 @@ class SequenceStep(TenantModel):
     def __str__(self):
         return f"{self.campaign.name} - Step {self.step_order} ({self.channel_type})"
 
+class EmailTemplate(TenantModel):
+    name = models.CharField(max_length=255)
+    subject = models.TextField()
+    body = models.TextField()
+    category = models.CharField(max_length=50, blank=True, default='general')
+    usage_count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.name
+
 class CampaignLead(TenantModel):
     STATUS_CHOICES = (
         ('ENROLLED', 'Enrolled'),
