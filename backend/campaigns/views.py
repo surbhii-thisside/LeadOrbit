@@ -43,8 +43,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 enrolled_count += 1
             except Lead.DoesNotExist:
                 continue
-                
-        return Response({"message": f"Successfully enrolled {enrolled_count} leads."}, status=status.HTTP_200_OK)
+        
+        # Refresh campaign to get updated cached counters from signals
+        campaign.refresh_from_db()
+        
+        return Response(
+            {
+                "message": f"Successfully enrolled {enrolled_count} leads.",
+                "total_enrolled": campaign.leads_count,
+            },
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=True, methods=['post'])
     def launch(self, request, pk=None):
@@ -98,7 +107,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        enrolled_count = campaign.enrolled_leads.count()
+        enrolled_count = campaign.leads_count
         if enrolled_count == 0:
             return Response(
                 {
@@ -298,7 +307,7 @@ class DashboardAnalyticsView(APIView):
     def get(self, request, *args, **kwargs):
         from django.utils import timezone
         from datetime import timedelta
-        from django.db.models import Count, Q
+        from django.db.models import Count, Q, Sum
         from django.db.models.functions import TruncDate
 
         org = getattr(request.user, 'organization', None)
@@ -317,15 +326,21 @@ class DashboardAnalyticsView(APIView):
 
         cutoff = timezone.now() - timedelta(days=days)
 
-        # ── Aggregate KPIs from CampaignLead ──
-        all_cls = CampaignLead.objects.filter(organization=org)
-
-        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
-        emails_sent = all_cls.filter(status__in=sent_statuses).count()
-        opened = all_cls.filter(last_opened_at__isnull=False).count()
-        replied = all_cls.filter(status='REPLIED').count()
-        clicked = all_cls.filter(last_clicked_at__isnull=False).count()
-        bounced = all_cls.filter(status='BOUNCED').count()
+        # ── Aggregate KPIs using cached counters on Campaign ──
+        # Sum cached counters across all campaigns for instant metrics
+        campaign_agg = Campaign.objects.filter(organization=org).aggregate(
+            emails_sent=Sum('sent_count'),
+            opened=Sum('open_count'),
+            replied=Sum('reply_count'),
+            clicked=Sum('clicked_count'),
+            bounced=Sum('bounced_count'),
+        )
+        
+        emails_sent = campaign_agg['emails_sent'] or 0
+        opened = campaign_agg['opened'] or 0
+        replied = campaign_agg['replied'] or 0
+        clicked = campaign_agg['clicked'] or 0
+        bounced = campaign_agg['bounced'] or 0
 
         total_leads = Lead.objects.filter(organization=org).count()
         active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
@@ -336,24 +351,26 @@ class DashboardAnalyticsView(APIView):
         bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
 
         # ── Time-series: daily aggregates within the window ──
-        ts_qs = all_cls.filter(created_at__gte=cutoff)
+        # Still need to query CampaignLead for time-series breakdown
+        all_cls = CampaignLead.objects.filter(organization=org, created_at__gte=cutoff)
 
+        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
         sent_by_day = dict(
-            ts_qs.filter(status__in=sent_statuses)
+            all_cls.filter(status__in=sent_statuses)
             .annotate(day=TruncDate('created_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         opened_by_day = dict(
-            ts_qs.filter(last_opened_at__isnull=False)
+            all_cls.filter(last_opened_at__isnull=False)
             .annotate(day=TruncDate('last_opened_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         replied_by_day = dict(
-            ts_qs.filter(last_replied_at__isnull=False)
+            all_cls.filter(last_replied_at__isnull=False)
             .annotate(day=TruncDate('last_replied_at'))
             .values('day')
             .annotate(count=Count('id'))
@@ -372,28 +389,23 @@ class DashboardAnalyticsView(APIView):
             opened_series.append(opened_by_day.get(d, 0))
             replied_series.append(replied_by_day.get(d, 0))
 
-        # ── Per-campaign breakdown ──
+        # ── Per-campaign breakdown: use cached counters directly ──
         campaign_stats = []
         for c in Campaign.objects.filter(organization=org).order_by('-created_at')[:20]:
-            cls = CampaignLead.objects.filter(campaign=c, organization=org)
-            c_sent = cls.filter(status__in=sent_statuses).count()
-            c_opened = cls.filter(last_opened_at__isnull=False).count()
-            c_replied = cls.filter(status='REPLIED').count()
-            c_bounced = cls.filter(status='BOUNCED').count()
             campaign_stats.append({
                 'id': str(c.id),
                 'name': c.name,
                 'status': c.status,
-                'enrolled': cls.count(),
-                'sent': c_sent,
-                'opened': c_opened,
-                'replied': c_replied,
-                'bounced': c_bounced,
+                'enrolled': c.leads_count,
+                'sent': c.sent_count,
+                'opened': c.open_count,
+                'replied': c.reply_count,
+                'bounced': c.bounced_count,
             })
 
         # ── Recent activity (real data) ──
         recent = []
-        for cl in all_cls.order_by('-updated_at')[:10]:
+        for cl in CampaignLead.objects.filter(organization=org).order_by('-updated_at')[:10]:
             action = cl.status.lower()
             lead_name = cl.lead.email if cl.lead else 'Unknown'
             recent.append({
