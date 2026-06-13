@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from .models import BlockedDomain, Lead, Tag, LeadTag, validate_domain
+from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -33,6 +33,7 @@ class LeadSerializer(serializers.ModelSerializer):
         tags = Tag.objects.filter(tagged_leads__lead=obj)
         return TagSerializer(tags, many=True).data
 
+<<<<<<< HEAD
     def _set_tags(self, lead, tag_ids):
         """Replace the lead's tags with the given list of Tag UUIDs."""
         org = lead.organization
@@ -61,6 +62,21 @@ class LeadSerializer(serializers.ModelSerializer):
             self._set_tags(lead, tag_ids)
         return lead
 
+=======
+class LeadImportJobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadImportJob
+        fields = [
+            'id',
+            'filename',
+            'total_rows',
+            'imported_count',
+            'failed_count',
+            'error_log',
+            'created_at',
+        ]
+        read_only_fields = fields
+>>>>>>> upstream/main
 
 class BlockedDomainSerializer(serializers.ModelSerializer):
     class Meta:

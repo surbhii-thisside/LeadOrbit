@@ -1,10 +1,20 @@
 from django.db.models import Q
 from rest_framework import viewsets, parsers, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
+<<<<<<< HEAD
 
 from .models import BlockedDomain, Lead, LeadTag, Tag
 from .serializers import BlockedDomainSerializer, LeadSerializer, TagSerializer
+=======
+from .models import BlockedDomain, Lead, LeadImportJob, Tag
+from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
+
+
+class LeadImportJobPagination(PageNumberPagination):
+    page_size = 10
+>>>>>>> upstream/main
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -77,11 +87,20 @@ class LeadViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+<<<<<<< HEAD
+=======
+        job = LeadImportJob.objects.create(
+            organization=request.user.organization,
+            filename=file_obj.name or 'lead-import.csv',
+        )
+
+>>>>>>> upstream/main
         # Trigger async celery task
         from .tasks import import_leads_from_csv
         file_contents = file_obj.read().decode('utf-8')
 
         # Ensure we pass the organization to the task
+<<<<<<< HEAD
         import_leads_from_csv.delay(file_contents, request.user.organization.id)
 
         return Response(
@@ -124,6 +143,27 @@ class LeadViewSet(viewsets.ModelViewSet):
         updated_tags = Tag.objects.filter(tagged_leads__lead=lead)
         return Response(TagSerializer(updated_tags, many=True).data, status=status.HTTP_200_OK)
 
+=======
+        import_leads_from_csv.delay(file_contents, request.user.organization.id, str(job.id))
+
+        return Response(
+            {
+                "message": "File received. Processing in background.",
+                "filename": file_obj.name,
+                "job_id": str(job.id),
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = LeadImportJobSerializer
+    pagination_class = LeadImportJobPagination
+    queryset = LeadImportJob.objects.all()
+
+    def get_queryset(self):
+        return LeadImportJob.objects.filter(organization=self.request.user.organization).order_by('-created_at')
+>>>>>>> upstream/main
 
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
