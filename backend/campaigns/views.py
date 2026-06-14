@@ -10,6 +10,60 @@ from leads.models import Lead
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
+import re
+
+def extract_merge_tags(text):
+    """Extract merge tags like {{firstName}}, {{company}} from text."""
+    if not text:
+        return set()
+    pattern = r'\{\{(\w+)\}\}'
+    matches = re.findall(pattern, text)
+    return set(m.lower() for m in matches)
+
+def validate_merge_tags_in_campaign(campaign):
+    """
+    Validate that all merge tags in campaign are available in enrolled leads.
+    Returns: (is_valid, error_message, missing_fields)
+    """
+    # Extract all merge tags from campaign content
+    all_tags = set()
+    
+    # Scan campaign steps for merge tags
+    for step in campaign.steps.all():
+        if hasattr(step, 'email_template') and step.email_template:
+            all_tags.update(extract_merge_tags(step.email_template.subject))
+            all_tags.update(extract_merge_tags(step.email_template.body))
+    
+    if not all_tags:
+        return True, None, []
+    
+    # Check if enrolled leads have data for these tags
+    enrolled_leads = campaign.enrolled_leads.all()
+    if not enrolled_leads:
+        return True, None, []
+    
+    missing_fields = []
+    for tag in all_tags:
+        # Check if leads have this field
+        leads_missing_field = []
+        for lead in enrolled_leads:
+            field_value = getattr(lead, tag, None)
+            if not field_value or str(field_value).strip() == '':
+                leads_missing_field.append(lead.email)
+        
+        if leads_missing_field:
+            missing_fields.append({
+                'field': tag,
+                'affected_leads_count': len(leads_missing_field),
+                'sample_leads': leads_missing_field[:3]
+            })
+    
+    if missing_fields:
+        error_msg = f"Missing fields found in {len(missing_fields)} merge tag(s). Please review enrolled leads."
+        return False, error_msg, missing_fields
+    
+    return True, None, []
+
 logger = logging.getLogger(__name__)
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -56,6 +110,21 @@ class CampaignViewSet(viewsets.ModelViewSet):
         from .tasks import process_active_leads, process_active_leads_once
 
         campaign = self.get_object()
+
+        # Validate merge tags before launch
+        is_valid, error_message, missing_fields = validate_merge_tags_in_campaign(campaign)
+        if not is_valid:
+            return Response(
+                {
+                    "error": error_message,
+                    "campaign_id": str(campaign.id),
+                    "missing_fields": missing_fields,
+                    "message": "Please ensure all leads have required fields before launching.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
 
         if campaign.connected_account_id:
             # Fetch the account using unscoped query to avoid TenantManager hiding it
