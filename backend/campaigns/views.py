@@ -129,12 +129,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """
         from django.conf import settings as django_settings
         from .tasks import process_active_leads, process_active_leads_once
-
         campaign = self.get_object()
-
-      # Validate merge tags before launch
+        # Validate merge tags before launch
         force_launch = bool(request.data.get('force_launch', False))
-
         is_valid, error_message, missing_fields = validate_merge_tags_in_campaign(campaign)
         if not is_valid and not force_launch:
             return Response(
@@ -151,15 +148,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         if not is_valid and force_launch:
             logger.warning(
                 "Campaign %s launched with missing merge tag fields (override applied): %s",
                 campaign.id, missing_fields,
             ) 
-
-
-
         if campaign.connected_account_id:
             # Fetch the account using unscoped query to avoid TenantManager hiding it
             from .models import ConnectedEmailAccount

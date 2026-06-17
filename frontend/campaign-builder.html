@@ -1773,7 +1773,7 @@ function showMergeTagWarningModal(message) {
                     <span style="font-size:1.5rem;">⚠️</span>
                     <h5 style="margin:0; font-weight:700;">Missing Lead Data</h5>
                 </div>
-                <p style="color:#475569; margin-bottom:20px; font-size:0.97rem;">${message}</p>
+                <p id="merge-modal-message" style="color:#475569; margin-bottom:20px; font-size:0.97rem;"></p>
                 <div style="display:flex; gap:10px; justify-content:flex-end;">
                     <button id="merge-modal-review" style="padding:8px 20px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; cursor:pointer; font-weight:600;">Review Leads</button>
                     <button id="merge-modal-launch" style="padding:8px 20px; border-radius:8px; border:none; background:#ef4444; color:#fff; cursor:pointer; font-weight:600;">Launch Anyway</button>
@@ -1781,7 +1781,7 @@ function showMergeTagWarningModal(message) {
             </div>
         `;
 
-        document.body.appendChild(modal);
+        document.getElementById('merge-modal-message').textContent = message;
 
         document.getElementById('merge-modal-launch').addEventListener('click', () => {
             modal.remove();
