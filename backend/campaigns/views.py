@@ -12,56 +12,77 @@ from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTempla
 
 import re
 
+# Merge tags use camelCase (matching template/frontend convention);
+# Lead model fields use snake_case — this maps between them.
+MERGE_TAG_FIELD_MAP = {
+    'firstName': 'first_name',
+    'lastName': 'last_name',
+    'company': 'company',
+    'phone': 'phone',
+    'linkedinUrl': 'linkedin_url',
+    'email': 'email',
+}
+
+
 def extract_merge_tags(text):
-    """Extract merge tags like {{firstName}}, {{company}} from text."""
+    """Extract merge tags like {{firstName}}, {{company}} from text.
+
+    Case is preserved (so tags can be looked up in MERGE_TAG_FIELD_MAP).
+    Optional whitespace inside the braces is allowed, e.g. {{ firstName }}.
+    """
     if not text:
         return set()
-    pattern = r'\{\{(\w+)\}\}'
+    pattern = r'{{\s*([a-zA-Z0-9_]+)\s*}}'
     matches = re.findall(pattern, text)
-    return set(m.lower() for m in matches)
+    return set(matches)
+
 
 def validate_merge_tags_in_campaign(campaign):
     """
     Validate that all merge tags in campaign are available in enrolled leads.
     Returns: (is_valid, error_message, missing_fields)
     """
-    # Extract all merge tags from campaign content
     all_tags = set()
-    
-    # Scan campaign steps for merge tags
     for step in campaign.steps.all():
-        if hasattr(step, 'email_template') and step.email_template:
-            all_tags.update(extract_merge_tags(step.email_template.subject))
-            all_tags.update(extract_merge_tags(step.email_template.body))
-    
+        all_tags.update(extract_merge_tags(getattr(step, 'template_subject', None)))
+        all_tags.update(extract_merge_tags(getattr(step, 'template_body', None)))
+
     if not all_tags:
         return True, None, []
-    
-    # Check if enrolled leads have data for these tags
-    enrolled_leads = campaign.enrolled_leads.all()
-    if not enrolled_leads:
+
+    # campaign.enrolled_leads returns CampaignLead rows, not Lead rows
+    enrolled_cleads = campaign.enrolled_leads.select_related('lead').all()
+    if not enrolled_cleads.exists():
         return True, None, []
-    
+
     missing_fields = []
     for tag in all_tags:
-        # Check if leads have this field
+        model_field = MERGE_TAG_FIELD_MAP.get(tag, tag)
+
         leads_missing_field = []
-        for lead in enrolled_leads:
-            field_value = getattr(lead, tag, None)
+        for clead in enrolled_cleads:
+            lead = clead.lead
+            if lead is None:
+                continue
+            field_value = getattr(lead, model_field, None)
             if not field_value or str(field_value).strip() == '':
                 leads_missing_field.append(lead.email)
-        
+
         if leads_missing_field:
             missing_fields.append({
                 'field': tag,
+                'mapped_field': model_field,
                 'affected_leads_count': len(leads_missing_field),
-                'sample_leads': leads_missing_field[:3]
+                'sample_leads': leads_missing_field[:3],
             })
-    
+
     if missing_fields:
-        error_msg = f"Missing fields found in {len(missing_fields)} merge tag(s). Please review enrolled leads."
+        error_msg = (
+            f"Missing data found for {len(missing_fields)} merge tag(s). "
+            "Some enrolled leads are missing required fields."
+        )
         return False, error_msg, missing_fields
-    
+
     return True, None, []
 
 logger = logging.getLogger(__name__)
@@ -111,18 +132,31 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
         campaign = self.get_object()
 
-        # Validate merge tags before launch
+      # Validate merge tags before launch
+        force_launch = bool(request.data.get('force_launch', False))
+
         is_valid, error_message, missing_fields = validate_merge_tags_in_campaign(campaign)
-        if not is_valid:
+        if not is_valid and not force_launch:
             return Response(
                 {
                     "error": error_message,
                     "campaign_id": str(campaign.id),
                     "missing_fields": missing_fields,
-                    "message": "Please ensure all leads have required fields before launching.",
+                    "requires_confirmation": True,
+                    "message": (
+                        "Some enrolled leads are missing data for merge tags used in this "
+                        "campaign. Emails to those leads may contain blank or broken "
+                        "personalization. Resend with force_launch=true to launch anyway."
+                    ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if not is_valid and force_launch:
+            logger.warning(
+                "Campaign %s launched with missing merge tag fields (override applied): %s",
+                campaign.id, missing_fields,
+            ) 
 
 
 
