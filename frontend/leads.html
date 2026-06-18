@@ -240,7 +240,6 @@
                     </div>
                 </div>
 
- HEAD
                 <!-- ─── Filter Panel (hidden by default) ─────────────────────── -->
                 <div id="filter-panel" class="filter-panel" style="display:none;" aria-label="Lead filters">
                     <div class="filter-panel-title">
@@ -341,7 +340,6 @@
                         </table>
                     </div>
                 </div>
- upstream/main
 
                 <div class="table-shell">
                     <div class="table-responsive">
@@ -439,10 +437,10 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
-<<<<<<< HEAD
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // full unfiltered list (client-side search backup)
         let allTags = [];            // all org tags (for the filter panel)
+        let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
 
@@ -459,7 +457,6 @@
         function contrastColor(hex) {
             try {
                 const { r, g, b } = hexToRgb(hex);
-                // Perceived luminance (WCAG formula)
                 const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
                 return lum > 0.55 ? '#1e293b' : '#ffffff';
             } catch {
@@ -483,16 +480,13 @@
             return String(str || '').replace(/[&<>"']/g, c => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
-=======
-        let allLeads = [];
-        let allImportJobs = [];
+        }
 
         function formatTimestamp(value) {
             if (!value) return '-';
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return '-';
             return date.toLocaleString();
->>>>>>> upstream/main
         }
 
         function copyToClipboard(text, button) {
@@ -503,9 +497,8 @@
             });
         }
 
-<<<<<<< HEAD
         // ─── Render ─────────────────────────────────────────────────────────
-=======
+
         function renderImportErrorRows(job) {
             const tbody = document.getElementById('import-errors-body');
             const errors = Array.isArray(job?.error_log) ? job.error_log : [];
@@ -537,7 +530,6 @@
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
->>>>>>> upstream/main
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
@@ -631,7 +623,6 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
-<<<<<<< HEAD
         // ─── Filter Panel ────────────────────────────────────────────────────
 
         async function loadTags() {
@@ -717,7 +708,6 @@
                 dot.classList.remove('visible');
             }
 
-            // Active filter summary chips
             const row = document.getElementById('active-filters-row');
             const chips = [];
 
@@ -776,9 +766,8 @@
             updateFilterIndicator({});
         }
 
-        // ─── Text search (client-side, applied on top of server results) ────
+        // ─── Data loading ────────────────────────────────────────────────────
 
-=======
         async function loadLeads() {
             const res = await fetchWithAuth('/leads/');
             if (!res.ok) return;
@@ -795,7 +784,8 @@
             renderImportHistory(allImportJobs);
         }
 
->>>>>>> upstream/main
+        // ─── Text search (client-side, applied on top of server results) ────
+
         function applySearch() {
             const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
             if (!q) {
@@ -813,7 +803,6 @@
         // ─── Bootstrap ──────────────────────────────────────────────────────
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // Initial load — no filters
             try {
                 await loadLeads();
                 await loadImportHistory();
@@ -821,21 +810,17 @@
                 console.error('Error fetching leads:', e);
             }
 
-            // Load tags for the filter panel
             await loadTags();
 
-            // Search input
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
-            // Filter panel toggle
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
                 const isHidden = filterPanel.style.display === 'none';
                 filterPanel.style.display = isHidden ? 'block' : 'none';
             });
 
-            // Apply / Clear filter buttons
             document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
             document.getElementById('clear-filters-btn').addEventListener('click', async () => {
                 clearFilters();
@@ -849,7 +834,6 @@
                 }
             });
 
-            // CSV Upload
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const fileInput = document.getElementById('csv-file');
@@ -870,16 +854,11 @@
                     });
 
                     if (res.status === 202) {
-<<<<<<< HEAD
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
-                        setTimeout(() => window.location.reload(), 1800);
-=======
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>File uploaded. Processing now...</span>';
                         await loadLeads();
                         await loadImportHistory();
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
->>>>>>> upstream/main
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
                     }
