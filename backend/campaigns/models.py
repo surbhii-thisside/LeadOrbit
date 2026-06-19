@@ -38,6 +38,14 @@ class Campaign(TenantModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     settings = models.JSONField(default=dict, blank=True)
     connected_account = models.ForeignKey(ConnectedEmailAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='campaigns')
+    
+    # Cached counters for performance optimization
+    leads_count = models.IntegerField(default=0, help_text="Total enrolled leads")
+    sent_count = models.IntegerField(default=0, help_text="Leads with sent messages")
+    open_count = models.IntegerField(default=0, help_text="Leads that opened emails")
+    reply_count = models.IntegerField(default=0, help_text="Leads that replied")
+    clicked_count = models.IntegerField(default=0, help_text="Leads that clicked links")
+    bounced_count = models.IntegerField(default=0, help_text="Bounced leads")
 
     def __str__(self):
         return self.name
