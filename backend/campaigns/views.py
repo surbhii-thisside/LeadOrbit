@@ -1,5 +1,11 @@
 import logging
 
+
+import urllib.parse
+from django.core.signing import Signer, BadSignature
+from django.http import HttpResponseRedirect, HttpResponseBadRequest
+# ------------------------------------------
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -672,3 +678,44 @@ def unsubscribe_view(request, lead_id, token):
     )
 
     return HttpResponse(html, content_type='text/html')
+
+# --- New ClickTrackingView (Issue #259) ---
+class ClickTrackingView(APIView):
+    """
+    Unauthenticated endpoint to track email link clicks and redirect to the destination.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        signed_token = request.GET.get('t')
+        dest_url = request.GET.get('dest')
+
+        if not signed_token or not dest_url:
+            return HttpResponseBadRequest("Missing tracking parameters.")
+
+        signer = Signer()
+        try:
+            # Decode and verify the token signature
+            unsigned_payload = signer.unsign(signed_token)
+            campaign_lead_id, step_id = unsigned_payload.split(':')
+        except (BadSignature, ValueError):
+            return HttpResponseBadRequest("Invalid or tampered tracking token.")
+
+        # Analytics ko update karna
+        try:
+            lead = CampaignLead.objects.get(id=campaign_lead_id)
+            lead.last_clicked_at = timezone.now()
+            lead.save(update_fields=['last_clicked_at'])
+
+            # Optional: Agar conditionally aage badhana hai sequence ko
+            if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
+                from .tasks import _execute_condition_click_step
+                _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
+
+        except CampaignLead.DoesNotExist:
+            pass # Failsafe: Continue to redirect even if the lead was deleted
+
+        # Original Destination par redirect karna
+        decoded_dest = urllib.parse.unquote(dest_url)
+        return HttpResponseRedirect(decoded_dest)
+# ------------------------------------------
