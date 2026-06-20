@@ -10,7 +10,6 @@ from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
 
-
 import urllib.parse
 from bs4 import BeautifulSoup
 from django.core.signing import Signer

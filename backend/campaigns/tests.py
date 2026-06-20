@@ -1432,6 +1432,7 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
 
+
     def test_launch_blocks_when_merge_tags_missing_lead_data(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
@@ -1567,6 +1568,7 @@ class CampaignWorkflowTests(APITestCase):
                 f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json'
             )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
 
 @override_settings(
     GOOGLE_CLIENT_ID='test-google-client-id',
